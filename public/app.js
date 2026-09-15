@@ -23,6 +23,25 @@ const authView = $("authView"), lobbyView = $("lobbyView"), gameView = $("gameVi
 let currentUser = null, currentMatch = null, myRole = null, matchUnsub = null;
 let queueKey = null, challengeUnsub = null;
 let localClashStart = 0, lastRenderedTurn = 0;
+let guestMode = false;
+let localGame = null;
+
+function enterGuestMode(reason) {
+  guestMode = true;
+  const saved = JSON.parse(localStorage.getItem("wow-local-record") || "{\"wins\":0,\"losses\":0}");
+  $("wins").textContent = saved.wins || 0;
+  $("losses").textContent = saved.losses || 0;
+  $("userLabel").textContent = "Guest mode — record saved in this browser";
+  $("randomBtn").textContent = "Play Local Match";
+  $("opponentEmail").disabled = true;
+  $("challengeBtn").disabled = true;
+  $("queueMsg").textContent = reason || "Playing without an account.";
+  show(lobbyView);
+}
+function saveGuestRecord(wins, losses) {
+  localStorage.setItem("wow-local-record", JSON.stringify({wins, losses}));
+  $("wins").textContent = wins; $("losses").textContent = losses;
+}
 
 function show(view){ [authView,lobbyView,gameView].forEach(v=>v.classList.add("hidden")); view.classList.remove("hidden"); }
 function msg(text){ $("authMsg").textContent=text; }
@@ -43,12 +62,18 @@ async function ensureProfile(user){
   else await update(ref(db, `users/${user.uid}`), {email:(user.email||"").toLowerCase(),online:true});
 }
 
-onAuthStateChanged(auth, async user=>{
-  if(!user){ currentUser=null; show(authView); if(challengeUnsub)challengeUnsub(); return; }
-  currentUser=user;
-  try{ await ensureProfile(user); await loadRecord(); setupChallenges(); show(lobbyView); }
-  catch(e){ console.error(e); msg("Could not load your account."); }
-});
+try {
+  onAuthStateChanged(auth, async user=>{
+    if(guestMode) return;
+    if(!user){ currentUser=null; show(authView); if(challengeUnsub)challengeUnsub(); return; }
+    currentUser=user;
+    try{ await ensureProfile(user); await loadRecord(); setupChallenges(); show(lobbyView); }
+    catch(e){ console.error(e); enterGuestMode("Firebase could not load your account. Continuing in guest mode."); }
+  });
+} catch(e) {
+  console.error(e);
+  enterGuestMode("Firebase is unavailable. Continuing in guest mode.");
+}
 
 async function loadRecord(){
   const snap=await getDoc(doc(fs,"profiles",currentUser.uid));
@@ -57,12 +82,13 @@ async function loadRecord(){
   $("userLabel").textContent=currentUser.email||currentUser.displayName||"Signed in";
 }
 
-$("googleBtn").onclick=async()=>{try{await signInWithPopup(auth,new GoogleAuthProvider())}catch(e){msg(e.message)}};
-$("emailSignInBtn").onclick=async()=>{try{await signInWithEmailAndPassword(auth,$("emailInput").value,$("passwordInput").value)}catch(e){msg(e.message)}};
-$("emailSignUpBtn").onclick=async()=>{try{await createUserWithEmailAndPassword(auth,$("emailInput").value,$("passwordInput").value)}catch(e){msg(e.message)}};
+$("googleBtn").onclick=async()=>{try{await signInWithPopup(auth,new GoogleAuthProvider())}catch(e){enterGuestMode("Google sign-in is unavailable. Continuing in guest mode.")}};
+$("emailSignInBtn").onclick=async()=>{try{await signInWithEmailAndPassword(auth,$("emailInput").value,$("passwordInput").value)}catch(e){enterGuestMode("Account sign-in is unavailable. Continuing in guest mode.")}};
+$("emailSignUpBtn").onclick=async()=>{try{await createUserWithEmailAndPassword(auth,$("emailInput").value,$("passwordInput").value)}catch(e){enterGuestMode("Account creation is unavailable. Continuing in guest mode.")}};
 $("signOutBtn").onclick=()=>signOut(auth);
 
 async function randomMatch(){
+  if(guestMode){ startLocalMatch(); return; }
   if(!currentUser)return;
   $("randomBtn").disabled=true; queueMsg("Looking for an opponent…");
   const qref=ref(db,"matchQueue");
@@ -102,6 +128,7 @@ async function findUserByEmail(email){
 }
 
 async function challengeOpponent(){
+  if(guestMode){ $("queueMsg").textContent="Email challenges require an account."; return; }
   const email=$("opponentEmail").value.trim().toLowerCase();
   if(!email)return queueMsg("Enter an email address.");
   if(email===currentUser.email.toLowerCase())return queueMsg("You cannot challenge yourself.");
@@ -183,7 +210,30 @@ function renderGame(d){
 
 function canUse(me,move){return move==="shoot"?me.ammo>=1:move==="mana_shoot"?me.mana>=2:true}
 
+function startLocalMatch(){
+  localGame={status:"active",turn:1,result:null,
+    p1:{uid:"guest",email:"You",living:true,ammo:0,mana:0,move:null,clashTime:null},
+    p2:{uid:"cpu",email:"Computer Wizard",living:true,ammo:0,mana:0,move:null,clashTime:null}};
+  currentMatch="local"; myRole="p1"; recordedMatch=null; show(gameView); renderGame(localGame);
+}
+function localComputerMove(){
+  const e=localGame.p2, choices=["rel","mana_rel","block","trash"];
+  if(e.ammo>0) choices.push("shoot"); if(e.mana>=2) choices.push("mana_shoot");
+  return choices[Math.floor(Math.random()*choices.length)];
+}
+function resolveLocal(){
+  const d=localGame,p=d.p1,e=d.p2;e.move=localComputerMove();
+  const clash=(p.move==="shoot"&&e.move==="shoot")||(p.move==="mana_shoot"&&e.move==="mana_shoot");
+  p.ammo-=p.move==="shoot"?1:0;p.mana-=p.move==="mana_shoot"?2:0;
+  e.ammo-=e.move==="shoot"?1:0;e.mana-=e.move==="mana_shoot"?2:0;
+  if(p.move==="rel")p.ammo++;if(p.move==="mana_rel")p.mana++;if(e.move==="rel")e.ammo++;if(e.move==="mana_rel")e.mana++;
+  if(clash){const pt=Math.random(),et=Math.random();if(pt<et)e.living=false;else if(et<pt)p.living=false;else{p.living=false;e.living=false;}}
+  else{if((e.move==="shoot"&&p.move!=="block")||(e.move==="trash"&&p.move==="block")||(e.move==="mana_shoot"&&p.move!=="shoot"))p.living=false;if((p.move==="shoot"&&e.move!=="block")||(p.move==="trash"&&e.move==="block")||(p.move==="mana_shoot"&&e.move!=="shoot"))e.living=false;}
+  if(!p.living||!e.living){d.status="finished";d.result=p.living&&!e.living?"p1":e.living&&!p.living?"p2":"draw";renderGame(d);showResult(d.result);}
+  else{d.turn++;p.move=null;e.move=null;renderGame(d);}
+}
 async function chooseMove(move){
+  if(guestMode){const me=localGame.p1;if(!me.move&&me.living&&canUse(me,move)){me.move=move;resolveLocal();}return;}
   const snap=await get(ref(db,`matches/${currentMatch}`)); const d=snap.val(); if(!d)return;
   const me=d[myRole]; if(me.move||!me.living||!canUse(me,move))return;
   await update(ref(db,`matches/${currentMatch}/${myRole}`),{move});
@@ -252,6 +302,7 @@ async function maybeResolve(d){
 }
 
 async function finishRecord(result){
+  if(guestMode){const old=JSON.parse(localStorage.getItem("wow-local-record")||"{\"wins\":0,\"losses\":0}");if(result==="p1")old.wins++;else old.losses++;saveGuestRecord(old.wins,old.losses);return;}
   if(!currentUser||!result)return;
   const outcome=result==="draw"?"loss":(result===myRole?"win":"loss");
   const p=doc(fs,"profiles",currentUser.uid);
@@ -270,6 +321,7 @@ function showResult(result){
 $("backLobbyBtn").onclick=()=>{ $("resultModal").classList.add("hidden"); if(matchUnsub)matchUnsub(); currentMatch=null; myRole=null; show(lobbyView); };
 
 $("leaveGameBtn").onclick=async()=>{
+  if(guestMode){currentMatch=null;localGame=null;show(lobbyView);return;}
   if(currentMatch){
     const snap=await get(ref(db,`matches/${currentMatch}`));const d=snap.val();
     if(d&&d.status==="active"&&d[myRole]?.living){
@@ -289,3 +341,5 @@ onAuthStateChanged(auth,user=>{
     set(uref,true);
   }
 });
+
+$("guestBtn").onclick = () => enterGuestMode("Guest mode enabled. Online play requires an account.");
