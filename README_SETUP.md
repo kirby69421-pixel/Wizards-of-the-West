@@ -1,358 +1,138 @@
-# Wizards of the West — Complete Firebase + GitHub Pages setup
+# Wizards of the West — Firebase setup
 
-This version includes account authentication, persistent statistics, random matchmaking, direct email challenges, live Firebase game rooms, and guest fallback.
+This version separates Google sign-in, email sign-in, and email account creation. It also uses an exact email-to-UID lookup for challenges and resolves online turns atomically after both players have locked in their moves.
 
-## 1. Put the files at the repository root
+## 1. Firebase project
 
-Upload these files directly into your GitHub repository:
-
-- index.html
-- app.js
-- style.css
-- firebase-config.js
-- .nojekyll
-
-Do NOT put them inside `public/`.
-
-The repository should look like:
-
-wizards-of-the-west/
-  index.html
-  app.js
-  style.css
-  firebase-config.js
-  .nojekyll
-
-## 2. Create the Firebase project
-
-Open Firebase Console:
-https://console.firebase.google.com/
-
-Click **Create a project**.
-
-A simple name such as `wizards-of-the-west` is fine.
-
-After the project exists, you need three Firebase products:
+Create/open the Firebase project used by the game.
 
 ### Authentication
 
-Firebase Console → Build → Authentication → Get started → Sign-in method.
+Firebase Console → Authentication → Sign-in method:
 
-Enable:
-- Google
-- Email/Password
+- Enable **Google**.
+- Enable **Email/Password**.
 
-Google is for the Google button. Email/Password lets players register and sign in directly.
+Email/Password is required for the **Create Email Account** and **Sign in with Email** buttons.
+
+### Web app
+
+Firebase Console → Project settings → Your apps → Web app.
+
+Copy that web app's configuration into `firebase-config.js`.
+
+The values must belong to the same Firebase project as the Authentication, Firestore, and Realtime Database services.
 
 ### Realtime Database
 
-Firebase Console → Build → Realtime Database → Create Database.
+Firebase Console → Build → Realtime Database → Create database.
 
-This is used for:
-- matchmaking queue
-- live room state
-- moves during a match
+Copy the **Database URL shown by Firebase** into `firebase-config.js` as `databaseURL`. Do not construct it manually. Firebase documents that the URL may be either `firebaseio.com` or a regional `firebasedatabase.app` URL depending on the database location.
 
-Choose a database location and create it.
+Publish the contents of `database.rules.json` in:
+
+Realtime Database → Rules
 
 ### Firestore
 
 Firebase Console → Build → Firestore Database → Create database.
 
-This is used for:
-- player records
-- wins/losses
-- direct challenges
+Publish `firestore.rules` in:
 
-## 3. Register the website as a Firebase Web App
+Firestore Database → Rules
 
-Firebase Console → gear icon → Project settings.
+Do not use the old Firestore rules from an earlier version of this project.
 
-Scroll to **Your apps** and click the Web icon (`</>`).
-
-Register a web app. The app name can be `Wizards of the West`.
-
-Firebase will show a `firebaseConfig` object.
-
-Open the downloaded `firebase-config.js`.
-
-Replace the placeholders:
-
-`PASTE_API_KEY_HERE`
-`PASTE_PROJECT_ID`
-`PASTE_MESSAGING_SENDER_ID`
-`PASTE_APP_ID`
-
-with the values from Firebase.
-
-Leave:
-
-`firebaseEnabled = true`
-
-Do not put Firebase service-account private keys in this file. The normal Web App config is intended to be used by browser applications.
-
-## 4. Authorize GitHub Pages
+## 2. Authentication authorized domain
 
 Firebase Console → Authentication → Settings → Authorized domains.
 
-Add the domain GitHub Pages uses.
+Add your GitHub Pages hostname, for example:
 
-For a normal project site this is usually:
+`yourusername.github.io`
 
-`YOUR-GITHUB-USERNAME.github.io`
+If you use a custom domain, add that domain too.
 
-Do not add `/repository-name` to the domain field.
+`localhost` is normally already present for local testing.
 
-This step is especially important for Google sign-in.
+## 3. GitHub Pages
 
-## 5. Publish the Firebase security rules
+Put these files directly in the repository root:
 
-### Realtime Database
-
-Firebase Console → Build → Realtime Database → Rules.
-
-Replace the rules with the contents of:
-
-`database.rules.json`
-
-Click Publish.
-
-### Firestore
-
-Firebase Console → Build → Firestore Database → Rules.
-
-Replace the rules with the contents of:
-
-`firestore.rules`
-
-Click Publish.
-
-## 6. Enable GitHub Pages
-
-GitHub repository → Settings → Pages.
-
-Under Build and deployment select:
-
-**Source:** Deploy from a branch
+- index.html
+- app.js
+- style.css
+- firebase-config.js
+- database.rules.json
+- firestore.rules
 
 Then:
 
-**Branch:** main
-**Folder:** / (root)
+GitHub → repository → Settings → Pages
 
-Click Save.
+Choose:
 
-Wait for GitHub to finish deploying.
+- Deploy from a branch
+- your main branch
+- folder: `/ (root)`
 
-Your site should then be available at a URL like:
+Do not put `index.html` inside a `public` folder for this build.
 
-`https://YOUR-GITHUB-USERNAME.github.io/YOUR-REPOSITORY/`
+## 4. Test in this order
 
-## 7. First test: guest mode
+1. Open the GitHub Pages site.
+2. Confirm the bottom status says **Firebase connected**.
+3. Click **Sign in with Google**.
+4. Confirm your Google account appears.
+5. Open Firebase Console → Authentication → Users and confirm the user exists.
+6. Click **Create Email Account** with a NEW email and password.
+7. Confirm the email account appears under Authentication → Users.
+8. Sign out and test **Sign in with Email**.
+9. Sign in with two Google accounts in two browser profiles/windows.
+10. Use **Challenge by Email** from one account to the other.
+11. Accept the challenge on the second account.
+12. In the battle, each player selects a move independently. A move is locked locally; the turn does not resolve until both moves exist in the same Firebase room state.
 
-Open the published site.
+## 5. If Firebase says it is not connected
 
-Click **Play as Guest**.
+Open F12 → Console and reload the page.
 
-Guest mode does not require a Firebase account. It uses the browser's local storage for guest statistics.
+This build distinguishes SDK initialization from Realtime Database connection. The page also watches Firebase's special `/.info/connected` location.
 
-Play a battle and verify that the game works.
+Check these first:
 
-## 8. Second test: Google
+- `firebaseEnabled` is `true`.
+- `apiKey`, `authDomain`, `databaseURL`, `projectId`, `messagingSenderId`, and `appId` are from the same Firebase Web App.
+- The Realtime Database actually exists.
+- `databaseURL` is copied from Firebase's Realtime Database page.
+- Realtime Database rules are published.
+- The GitHub Pages domain is an authorized Authentication domain.
 
-Click **Sign in with Google**.
+## 6. If email account creation fails
 
-Complete Google's login flow.
+The error now distinguishes common causes:
 
-If Google says the domain is not authorized, return to:
+- Email/password provider disabled → enable Email/Password in Authentication → Sign-in method.
+- Email already exists → use Sign in with Email.
+- Weak password → use at least 6 characters (or satisfy any stronger password policy configured in Firebase).
+- Invalid email → use a valid email address.
 
-Firebase → Authentication → Settings → Authorized domains
+The game no longer treats `auth/invalid-credential` as an invitation to silently create an account.
 
-and add the GitHub Pages domain.
+## 7. If direct challenges fail
 
-After signing in, the account's player record is created in Firestore under:
+Both players must be signed in.
 
-`players/<Firebase UID>`
+The sender's account must have a `playerLookup` document. The game creates that automatically when a user signs in successfully.
 
-## 9. Third test: Email/Password
+If you changed Firestore rules manually, republish the included `firestore.rules`.
 
-Click **Sign in / Register with Email**.
+## 8. What the online combat does
 
-Enter an email address and a password of at least 6 characters.
+A player selecting a move does not immediately resolve the attack.
 
-If the account doesn't exist, the site attempts to register it. If it already exists, it attempts to sign in.
+Each player gets one independent move field in the shared room state. The server-side Realtime Database transaction only resolves the turn once both fields are present. The transaction then writes the complete result at once.
 
-## 10. Test random matchmaking
+For H-vs-H and J-vs-J clashes, both clients submit their clash timestamp with their locked move. The lower timestamp wins; an exact tie is a double KO.
 
-You need two different signed-in Firebase accounts.
-
-The easiest test is:
-- Account A in one browser
-- Account B in another browser or an incognito window
-
-On both, sign in.
-
-Account A clicks **Find Random Opponent**.
-
-Account B does the same.
-
-The first available opponent is paired into a Firebase Realtime Database room.
-
-The room keeps:
-- both player IDs
-- each player's ammo
-- each player's mana
-- each player's move
-- turn number
-- living/dead state
-- clash timing
-
-## 11. Test direct challenges
-
-Both players must have Firebase accounts.
-
-Player A:
-1. Click **Challenge by Email**.
-2. Enter Player B's account email.
-3. Click **Send Challenge**.
-
-Player B should see an incoming challenge.
-
-Player B clicks **Accept**.
-
-Both clients then enter the same Firebase room.
-
-## 12. If Firebase fails
-
-The website deliberately has a guest fallback.
-
-If Firebase cannot load or isn't configured correctly, the page does not become unusable. **Play as Guest** still starts a local battle.
-
-This is useful for testing the game before Firebase is configured.
-
-## 13. Important security limitation
-
-This is a functional browser multiplayer prototype, not a cheat-proof competitive server.
-
-The browser is responsible for submitting moves, so a technically knowledgeable player could modify the JavaScript or Firebase requests.
-
-For a serious competitive version, combat resolution should be moved to a trusted backend/Cloud Function so the server—not the player's browser—decides whether a move is legal and who wins.
-
-## 14. If GitHub shows the README instead of the game
-
-Check these two things:
-
-1. `index.html` is directly in the repository root.
-2. GitHub Pages is set to `main` + `/ (root)`.
-
-You should NOT have:
-
-`repository/public/index.html`
-
-or:
-
-`repository/wizards_of_the_west/index.html`
-
-The correct location is:
-
-`repository/index.html`
-
-## 15. If the site loads but Firebase does not
-
-Check `firebase-config.js`.
-
-Make sure:
-- `firebaseEnabled` is `true`
-- `apiKey` isn't a placeholder
-- `authDomain` uses your project ID
-- `databaseURL` is your actual Realtime Database URL
-- `projectId` is correct
-- `messagingSenderId` is correct
-- `appId` is correct
-
-Then reload the GitHub Pages site.
-
-## 16. What each Firebase service does
-
-Authentication = who the player is.
-
-Firestore = account/player information and challenges.
-
-Realtime Database = fast-changing multiplayer state.
-
-GitHub Pages = serves the website.
-
-The browser JavaScript = displays the game and communicates with Firebase.
-
-
-## Troubleshooting Firebase saying "not connected"
-
-The fixed version now distinguishes between:
-- Firebase SDK failed to load/initialize
-- Firebase SDK loaded but Realtime Database is offline
-- Firebase is actually connected
-
-If it reports an error, the exact Firebase error is shown at the bottom of the page and in the browser console.
-
-For this project, check these in order:
-
-1. **Realtime Database actually exists**
-   - Firebase Console → Build → Realtime Database.
-   - If you have never created a Realtime Database for this project, create one.
-
-2. **Check the database URL**
-   - Firebase Console → Realtime Database → Data.
-   - The URL shown there must match `databaseURL` in `firebase-config.js`.
-   - Some newer Firebase projects use a regional URL ending in `.firebasedatabase.app` instead of the older `.firebaseio.com` form. Copy the URL from the Firebase console rather than guessing it.
-
-3. **Authentication providers**
-   - Authentication → Sign-in method.
-   - Enable Google and/or Email/Password.
-
-4. **GitHub Pages authorized domain**
-   - Authentication → Settings → Authorized domains.
-   - Add `YOUR-USERNAME.github.io`.
-   - Do not include the repository path.
-
-5. **Realtime Database rules**
-   - Publish `database.rules.json` under Realtime Database → Rules.
-
-6. **Firestore rules**
-   - Publish `firestore.rules` under Firestore Database → Rules.
-
-7. **Hard refresh GitHub Pages**
-   - GitHub Pages can temporarily serve an older cached JavaScript file.
-   - Use Ctrl+Shift+R after pushing the new files.
-
-### Finding the exact error
-
-In Chrome/Edge:
-- Open the game.
-- Press F12.
-- Open **Console**.
-- Reload the page.
-- Look for a line beginning with `[Firebase initialization]`, `[Firebase player setup]`, or another `[Firebase ...]` label.
-
-The fixed version no longer hides the actual Firebase exception behind the generic "Firebase could not connect" message.
-
-## Combat fixes in this version
-
-The previous build had several synchronization problems:
-
-- The online resolver could resolve a turn, but then read `currentRoom` before its realtime listener had received the transaction result.
-- Player states did not contain reliable player UIDs, so a win could produce an undefined winner.
-- The room status and result were written separately from the turn transaction, allowing both clients to race.
-- The computer's guest move was selected and resolved immediately rather than being presented as a simultaneous locked move.
-- Clash timing used a client-generated timestamp.
-
-The fixed version:
-- locks both moves before resolving a turn;
-- resolves the entire turn in one Realtime Database transaction;
-- writes `finished` and the winner atomically with the final state;
-- gives both fighters their actual UIDs in room state;
-- prevents a player from submitting a second move during the same turn;
-- shows "Both moves locked. Resolving…" before resolution;
-- uses Firebase's server timestamp for online clash ordering;
-- adds a short reveal delay to guest battles so the computer and player actions resolve together.
-
-The browser game is still client-side, so this is not a cheat-proof competitive server. For a serious ranked game, combat resolution should eventually move to a trusted backend.
+The browser client is still not a cheat-proof competitive server. A determined user can modify browser code. This build is intended for a private/friend multiplayer game on GitHub Pages.
