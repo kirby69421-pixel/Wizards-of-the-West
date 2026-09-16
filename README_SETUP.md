@@ -283,3 +283,76 @@ Realtime Database = fast-changing multiplayer state.
 GitHub Pages = serves the website.
 
 The browser JavaScript = displays the game and communicates with Firebase.
+
+
+## Troubleshooting Firebase saying "not connected"
+
+The fixed version now distinguishes between:
+- Firebase SDK failed to load/initialize
+- Firebase SDK loaded but Realtime Database is offline
+- Firebase is actually connected
+
+If it reports an error, the exact Firebase error is shown at the bottom of the page and in the browser console.
+
+For this project, check these in order:
+
+1. **Realtime Database actually exists**
+   - Firebase Console → Build → Realtime Database.
+   - If you have never created a Realtime Database for this project, create one.
+
+2. **Check the database URL**
+   - Firebase Console → Realtime Database → Data.
+   - The URL shown there must match `databaseURL` in `firebase-config.js`.
+   - Some newer Firebase projects use a regional URL ending in `.firebasedatabase.app` instead of the older `.firebaseio.com` form. Copy the URL from the Firebase console rather than guessing it.
+
+3. **Authentication providers**
+   - Authentication → Sign-in method.
+   - Enable Google and/or Email/Password.
+
+4. **GitHub Pages authorized domain**
+   - Authentication → Settings → Authorized domains.
+   - Add `YOUR-USERNAME.github.io`.
+   - Do not include the repository path.
+
+5. **Realtime Database rules**
+   - Publish `database.rules.json` under Realtime Database → Rules.
+
+6. **Firestore rules**
+   - Publish `firestore.rules` under Firestore Database → Rules.
+
+7. **Hard refresh GitHub Pages**
+   - GitHub Pages can temporarily serve an older cached JavaScript file.
+   - Use Ctrl+Shift+R after pushing the new files.
+
+### Finding the exact error
+
+In Chrome/Edge:
+- Open the game.
+- Press F12.
+- Open **Console**.
+- Reload the page.
+- Look for a line beginning with `[Firebase initialization]`, `[Firebase player setup]`, or another `[Firebase ...]` label.
+
+The fixed version no longer hides the actual Firebase exception behind the generic "Firebase could not connect" message.
+
+## Combat fixes in this version
+
+The previous build had several synchronization problems:
+
+- The online resolver could resolve a turn, but then read `currentRoom` before its realtime listener had received the transaction result.
+- Player states did not contain reliable player UIDs, so a win could produce an undefined winner.
+- The room status and result were written separately from the turn transaction, allowing both clients to race.
+- The computer's guest move was selected and resolved immediately rather than being presented as a simultaneous locked move.
+- Clash timing used a client-generated timestamp.
+
+The fixed version:
+- locks both moves before resolving a turn;
+- resolves the entire turn in one Realtime Database transaction;
+- writes `finished` and the winner atomically with the final state;
+- gives both fighters their actual UIDs in room state;
+- prevents a player from submitting a second move during the same turn;
+- shows "Both moves locked. Resolving…" before resolution;
+- uses Firebase's server timestamp for online clash ordering;
+- adds a short reveal delay to guest battles so the computer and player actions resolve together.
+
+The browser game is still client-side, so this is not a cheat-proof competitive server. For a serious ranked game, combat resolution should eventually move to a trusted backend.
