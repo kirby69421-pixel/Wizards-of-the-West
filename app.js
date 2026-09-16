@@ -5,8 +5,8 @@ const SDK_VERSION = "12.19.0";
 
 const initialState = (uid = null) => ({
   uid,
-  ammo: 1,
-  mana: 2,
+  ammo: 0,
+  mana: 0,
   living: true,
   move: null,
   submittedAt: null,
