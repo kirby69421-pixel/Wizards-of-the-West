@@ -1,117 +1,80 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Wizards of the West</title>
-  <link rel="stylesheet" href="./style.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wizards of the West</title>
+<link rel="stylesheet" href="./style.css">
 </head>
 <body>
-  <div id="authView" class="view">
-    <div class="panel auth-panel">
-      <h1>Wizards of the West</h1>
-      <p class="subtitle">Online wizard duels</p>
-      <button id="googleBtn" class="primary">Sign in with Google</button>
-      <div class="or"><span>or</span></div>
-      <button id="guestBtn">Play without an account</button>
-      <p class="hint">Guest mode works offline and saves your record only in this browser. Online matchmaking requires Firebase.</p>
-      <div class="or"><span>account login</span></div>
-      <input id="emailInput" type="email" placeholder="Email">
-      <input id="passwordInput" type="password" placeholder="Password (6+ characters)">
-      <div class="row">
-        <button id="emailSignInBtn">Sign in</button>
-        <button id="emailSignUpBtn">Create account</button>
-      </div>
-      <p id="authMsg" class="message"></p>
-      <p id="firebaseStatus" class="hint"></p>
-    </div>
-  </div>
+<main class="wrap">
+<header><h1>Wizards of the West</h1><p>Fast turn-based wizard duels.</p></header>
 
-  <div id="lobbyView" class="view hidden">
-    <header class="topbar">
-      <div>
-        <h1>Wizards of the West</h1>
-        <span id="userLabel"></span>
-      </div>
-      <button id="signOutBtn">Sign out</button>
-    </header>
+<section class="panel">
+<h2>Account</h2>
+<p id="authStatus">Playing as a guest.</p>
+<div class="row">
+<button id="googleBtn">Sign in with Google</button>
+<button id="emailBtn">Sign in / Register with Email</button>
+<button id="guestBtn">Play as Guest</button>
+</div>
+</section>
 
-    <main class="lobby">
-      <section class="panel record">
-        <h2>Your Record</h2>
-        <div class="record-number"><span id="wins">0</span> W — <span id="losses">0</span> L</div>
-      </section>
+<section id="menuPanel" class="panel">
+<h2>Lobby</h2>
+<div class="stats"><span>Wins: <b id="wins">0</b></span><span>Losses: <b id="losses">0</b></span></div>
+<div class="row">
+<button id="quickBtn">Find Random Opponent</button>
+<button id="challengeBtn">Challenge by Email</button>
+<button id="cancelBtn" class="secondary" hidden>Cancel Matchmaking</button>
+</div>
+<p id="lobbyStatus"></p>
+</section>
 
-      <section class="panel">
-        <h2>Find a Match</h2>
-        <button id="randomBtn" class="primary big">Random Match</button>
-        <p id="queueMsg" class="message"></p>
-        <div class="or"><span>or challenge someone</span></div>
-        <input id="opponentEmail" type="email" placeholder="Opponent's email">
-        <button id="challengeBtn">Send Challenge</button>
-        <p class="hint">The other player must already have a Wizards of the West account.</p>
-      </section>
+<section id="gamePanel" class="panel" hidden>
+<div class="gameTop"><h2>Battle</h2><span id="turnLabel"></span></div>
+<div class="fighters">
+<div><h3>You</h3><div class="bar"><span id="myHp"></span></div><p>Ammo: <b id="myAmmo">1</b> · Mana: <b id="myMana">2</b></p></div>
+<div><h3>Opponent</h3><div class="bar"><span id="enemyHp"></span></div><p>Ammo: <b id="enemyAmmo">1</b> · Mana: <b id="enemyMana">2</b></p></div>
+</div>
+<div id="moves" class="moves">
+<button data-move="rel">W — Reload Ammo</button>
+<button data-move="mana_rel">S — Reload Mana</button>
+<button data-move="block">A — Block</button>
+<button data-move="trash">D — Trash</button>
+<button data-move="shoot">H — Shoot</button>
+<button data-move="mana_shoot">J — Mana Shot</button>
+</div>
+<p id="gameStatus">Choose a move.</p>
+<button id="leaveBtn" class="secondary">Leave Match</button>
+</section>
 
-      <section id="challengePanel" class="panel hidden">
-        <h2>Incoming Challenges</h2>
-        <div id="challengeList"></div>
-      </section>
-    </main>
-  </div>
+<section id="challengePanel" class="panel" hidden>
+<h2>Challenge</h2>
+<p>Enter the email address of the Firebase account you want to challenge.</p>
+<input id="challengeEmail" type="email" placeholder="friend@example.com">
+<div class="row"><button id="sendChallengeBtn">Send Challenge</button><button id="closeChallengeBtn" class="secondary">Back</button></div>
+<p id="challengeStatus"></p>
+</section>
 
-  <div id="gameView" class="view hidden">
-    <header class="topbar">
-      <div>
-        <h1>Wizards of the West</h1>
-        <span id="gameOpponent"></span>
-      </div>
-      <button id="leaveGameBtn">Leave match</button>
-    </header>
+<section id="incomingPanel" class="panel" hidden>
+<h2>Incoming Challenge</h2>
+<p id="incomingText"></p>
+<div class="row"><button id="acceptBtn">Accept</button><button id="declineBtn" class="secondary">Decline</button></div>
+</section>
 
-    <main class="game">
-      <div id="clashBanner" class="clash hidden"></div>
-
-      <div class="cards">
-        <section class="card enemy">
-          <div class="card-head"><h2>Enemy Wizard</h2><span id="enemyStatus"></span></div>
-          <div>🟠 Ammo: <b id="enemyAmmo">0</b></div>
-          <div>🔵 Mana: <b id="enemyMana">0</b></div>
-          <div id="enemyReady" class="ready">CHOOSING...</div>
-          <div class="last">Last Move: <span id="enemyMove">None</span></div>
-        </section>
-
-        <section class="card player">
-          <div class="card-head"><h2>Player (You)</h2><span id="playerStatus"></span></div>
-          <div>🟠 Ammo: <b id="playerAmmo">0</b></div>
-          <div>🔵 Mana: <b id="playerMana">0</b></div>
-          <div id="playerReady" class="ready">CHOOSING...</div>
-          <div class="last">Last Move: <span id="playerMove">None</span></div>
-        </section>
-      </div>
-
-      <section class="panel controls">
-        <h2 id="turnTitle">Turn 1 Commands & Rules</h2>
-        <div class="move-grid">
-          <button data-move="rel">W — Reload Ammo<br><small>+1 Ammo</small></button>
-          <button data-move="mana_rel">S — Reload Mana<br><small>+1 Mana</small></button>
-          <button data-move="block">A — Block<br><small>Blocks Shoot</small></button>
-          <button data-move="trash">D — Trash<br><small>Beats Blocker</small></button>
-          <button data-move="shoot">H — Shoot<br><small>Costs 1 Ammo</small></button>
-          <button data-move="mana_shoot">J — Mana Shoot<br><small>Costs 2 Mana</small></button>
-        </div>
-        <p class="hint">You can use the buttons or the W/S/A/D/H/J keys. Shoot vs. Shoot and Mana Shoot vs. Mana Shoot trigger a speed clash.</p>
-      </section>
-    </main>
-  </div>
-
-  <div id="resultModal" class="modal hidden">
-    <div class="panel">
-      <h2 id="resultTitle"></h2>
-      <p id="resultText"></p>
-      <button id="backLobbyBtn" class="primary">Back to lobby</button>
-    </div>
-  </div>
-
-  <script type="module" src="./app.js"></script>
+<section class="panel small">
+<p id="systemStatus">Loading…</p>
+<details><summary>How to play</summary>
+<ul>
+<li>W reloads 1 ammo; S reloads 1 mana.</li>
+<li>A blocks normal attacks; D is a trash attack that beats blocking.</li>
+<li>H shoots and costs 1 ammo; J fires a mana shot and costs 2 mana.</li>
+<li>H vs H and J vs J are reaction-speed clashes.</li>
+</ul>
+</details>
+</section>
+</main>
+<script type="module" src="./app.js"></script>
 </body>
 </html>

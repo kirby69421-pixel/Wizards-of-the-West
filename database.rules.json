@@ -1,0 +1,16 @@
+{
+  "rules": {
+    "matchmaking": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+    "rooms": {
+      "$room": {
+        ".read": "auth != null && (data.child('players/a/uid').val() == auth.uid || data.child('players/b/uid').val() == auth.uid)",
+        ".write": "auth != null && (data.child('players/a/uid').val() == auth.uid || data.child('players/b/uid').val() == auth.uid || newData.child('players/a/uid').val() == auth.uid || newData.child('players/b/uid').val() == auth.uid)"
+      }
+    }
+  }
+}
